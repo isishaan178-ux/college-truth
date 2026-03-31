@@ -1,36 +1,10 @@
 import Link from "next/link";
-import { Eye, Heart, Phone } from "lucide-react";
+import { Eye } from "lucide-react";
 
 export default function Footer() {
   return (
     <footer className="border-t border-white/5 bg-[#0a0a0f]/90">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        {/* Mental Health Banner */}
-        <div className="py-6 border-b border-white/5">
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 rounded-xl bg-red-500/5 border border-red-500/10 p-4">
-            <div className="flex items-center gap-2 text-red-400">
-              <Heart className="h-4 w-4" />
-              <span className="text-sm font-semibold">Need someone to talk to?</span>
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-zinc-400">
-              <a href="tel:9152987821" className="flex items-center gap-1 hover:text-white transition-colors">
-                <Phone className="h-3 w-3" />
-                iCall: 9152987821
-              </a>
-              <span className="hidden sm:inline text-zinc-600">|</span>
-              <a href="tel:9820466726" className="flex items-center gap-1 hover:text-white transition-colors">
-                <Phone className="h-3 w-3" />
-                AASRA: 9820466726
-              </a>
-              <span className="hidden sm:inline text-zinc-600">|</span>
-              <a href="tel:18002662345" className="flex items-center gap-1 hover:text-white transition-colors">
-                <Phone className="h-3 w-3" />
-                Vandrevala Foundation: 1860-2662-345
-              </a>
-            </div>
-          </div>
-        </div>
-
         {/* Main Footer */}
         <div className="py-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Brand */}

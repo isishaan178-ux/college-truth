@@ -203,15 +203,6 @@ export default function SubmitPage() {
           </CardContent>
         </Card>
 
-        {/* Mental health notice */}
-        <Card className="border-amber-500/30 bg-amber-500/5">
-          <CardContent className="pt-6 pb-6">
-            <p className="text-sm text-amber-200/80">
-              <strong>Struggling with mental health?</strong> You&apos;re not alone. Reach out:
-              iCall — 9152987821 | AASRA — 9820466726 | Vandrevala Foundation — 1860-2662-345
-            </p>
-          </CardContent>
-        </Card>
       </div>
     </div>
   )

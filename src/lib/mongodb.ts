@@ -1,6 +1,10 @@
 import mongoose from 'mongoose'
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/college-truth'
+const MONGODB_URI = process.env.MONGODB_URI
+
+if (!MONGODB_URI) {
+  throw new Error('Please define the MONGODB_URI environment variable in .env.local or Vercel settings')
+}
 
 let cached = (global as any).mongoose || { conn: null, promise: null }
 
