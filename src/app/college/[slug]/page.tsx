@@ -95,8 +95,9 @@ export default async function CollegeDetailPage({
     );
   }
 
-  // Fetch posts
+  // Fetch posts — select only needed fields for speed
   const posts = await Post.find({ collegeSlug: slug, isApproved: true })
+    .select('content category sentiment source sourceUrl title upvotes author createdAt')
     .sort({ createdAt: -1 })
     .limit(100)
     .lean();
@@ -151,6 +152,7 @@ export default async function CollegeDetailPage({
       { state: (collegeDoc as any).state },
     ],
   })
+    .select('slug name overallScore')
     .limit(3)
     .lean();
 

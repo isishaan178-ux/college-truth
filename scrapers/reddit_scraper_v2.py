@@ -36,15 +36,10 @@ BASE_URL = "https://old.reddit.com"
 
 SEARCH_VARIANTS = [
     "",
-    "review",
-    "confession",
-    "truth",
-    "experience",
-    "hostel",
-    "placements",
-    "suicide",
-    "ragging",
-    "honest",
+    "review experience",
+    "confession truth",
+    "hostel placements",
+    "suicide ragging",
 ]
 
 USER_AGENTS = [
@@ -56,11 +51,12 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0",
 ]
 
-REQUEST_DELAY = 2  # seconds between requests
-RATE_LIMIT_WAIT = 60  # seconds to wait on 429
+REQUEST_DELAY = 5  # base seconds between requests
+REQUEST_JITTER = 4  # random extra seconds (0 to this value)
+RATE_LIMIT_WAIT = 90  # seconds to wait on 429
 MAX_RETRIES = 3
-MAX_COMMENTS_PER_POST = 10
-COMMENT_MIN_SCORE = 5
+MAX_COMMENTS_PER_POST = 5
+COMMENT_MIN_SCORE = 3
 
 # ── Category Keywords ────────────────────────────────────────────────────────
 
@@ -145,7 +141,7 @@ def _make_request(
             response = session.get(url, params=params, timeout=30)
 
             if response.status_code == 200:
-                time.sleep(REQUEST_DELAY)
+                time.sleep(REQUEST_DELAY + random.uniform(0, REQUEST_JITTER))
                 return response.json()
             elif response.status_code == 429:
                 wait_time = RATE_LIMIT_WAIT * (attempt + 1)
@@ -159,15 +155,15 @@ def _make_request(
                 return None
             else:
                 logger.warning(f"HTTP {response.status_code} for {url}")
-                time.sleep(REQUEST_DELAY)
+                time.sleep(REQUEST_DELAY + random.uniform(0, REQUEST_JITTER))
                 return None
 
         except requests.exceptions.Timeout:
             logger.warning(f"Timeout for {url} (attempt {attempt + 1}/{MAX_RETRIES})")
-            time.sleep(REQUEST_DELAY)
+            time.sleep(REQUEST_DELAY + random.uniform(0, REQUEST_JITTER))
         except requests.exceptions.RequestException as e:
             logger.warning(f"Request error for {url}: {e}")
-            time.sleep(REQUEST_DELAY)
+            time.sleep(REQUEST_DELAY + random.uniform(0, REQUEST_JITTER))
             return None
         except ValueError:
             logger.warning(f"Invalid JSON response from {url}")
@@ -415,7 +411,7 @@ def process_reddit_post(
     )
 
     return {
-        "college": college["_id"],
+        "collegeId": college["_id"],
         "collegeName": college["name"],
         "collegeSlug": college["slug"],
         "title": title[:300],
@@ -425,7 +421,7 @@ def process_reddit_post(
         "source": "reddit",
         "sourceUrl": f"https://old.reddit.com{permalink}" if permalink else "",
         "author": post_data.get("author", "[deleted]") or "[deleted]",
-        "score": post_data.get("score", 0),
+        "upvotes": post_data.get("score", 0),
         "subreddit": post_data.get("subreddit", ""),
         "contentHash": content_hash,
         "isApproved": False,
@@ -456,7 +452,7 @@ def process_comment_as_post(
     )
 
     return {
-        "college": college["_id"],
+        "collegeId": college["_id"],
         "collegeName": college["name"],
         "collegeSlug": college["slug"],
         "title": f"Re: {parent_title[:280]}",
@@ -466,7 +462,7 @@ def process_comment_as_post(
         "source": "reddit",
         "sourceUrl": f"https://old.reddit.com{permalink}" if permalink else "",
         "author": comment_data.get("author", "[deleted]") or "[deleted]",
-        "score": comment_data.get("score", 0),
+        "upvotes": comment_data.get("score", 0),
         "subreddit": comment_data.get("subreddit", ""),
         "contentHash": content_hash,
         "isApproved": False,
@@ -562,8 +558,8 @@ def scrape_college(
             for sort in ["top", "hot", "new"]:
                 posts = fetch_subreddit_posts(session, sub_name, sort)
                 _process_posts(posts)
-        # Small delay even for 404s to be polite
-        time.sleep(1)
+        # Delay even for 404s to avoid detection
+        time.sleep(REQUEST_DELAY + random.uniform(0, REQUEST_JITTER))
 
     return total_found, new_inserted, duplicates_skipped
 
@@ -579,6 +575,20 @@ def main() -> None:
 
     # Ensure index on contentHash for fast dedup lookups
     posts_col.create_index("contentHash", unique=True, sparse=True)
+
+    # Migrate old posts: rename 'college' -> 'collegeId', 'score' -> 'upvotes'
+    migrated = posts_col.update_many(
+        {"college": {"$exists": True}},
+        {"$rename": {"college": "collegeId"}},
+    )
+    if migrated.modified_count > 0:
+        logger.info(f"Migrated {migrated.modified_count} posts: college -> collegeId")
+    migrated2 = posts_col.update_many(
+        {"score": {"$exists": True}},
+        {"$rename": {"score": "upvotes"}},
+    )
+    if migrated2.modified_count > 0:
+        logger.info(f"Migrated {migrated2.modified_count} posts: score -> upvotes")
 
     try:
         # Load colleges

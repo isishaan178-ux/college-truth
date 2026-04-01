@@ -8,15 +8,16 @@ const SENTIMENT_SCORES: Record<string, number> = {
   NEGATIVE: 3,
 }
 
-const CATEGORY_TO_FIELD: Record<string, string> = {
-  PLACEMENTS: 'placements',
-  HOSTEL_MESS: 'hostel',
-  PROFESSORS: 'professors',
-  MENTAL_HEALTH: 'mentalHealth',
-  CAMPUS_LIFE: 'campusLife',
-  SPORTS: 'sports',
-  RESTRICTIONS: 'restrictions',
-  INFRASTRUCTURE: 'infrastructure',
+const CATEGORY_TO_FIELDS: Record<string, string[]> = {
+  PLACEMENTS: ['placements'],
+  HOSTEL_MESS: ['hostel', 'mess'],
+  PROFESSORS: ['professors'],
+  MENTAL_HEALTH: ['mentalHealth'],
+  CAMPUS_LIFE: ['campusLife'],
+  SPORTS: ['sports'],
+  RESTRICTIONS: ['restrictions'],
+  INFRASTRUCTURE: ['infrastructure'],
+  NEWS_CONTROVERSY: ['campusLife'],
 }
 
 export async function recalculateScores(collegeSlug: string) {
@@ -31,16 +32,17 @@ export async function recalculateScores(collegeSlug: string) {
   const categoryAgg: Record<string, { total: number; count: number }> = {}
 
   for (const post of approvedPosts) {
-    const field = CATEGORY_TO_FIELD[post.category]
-    if (!field) continue
-
-    if (!categoryAgg[field]) {
-      categoryAgg[field] = { total: 0, count: 0 }
-    }
+    const fields = CATEGORY_TO_FIELDS[post.category]
+    if (!fields) continue
 
     const sentimentScore = SENTIMENT_SCORES[post.sentiment] || 5
-    categoryAgg[field].total += sentimentScore
-    categoryAgg[field].count += 1
+    for (const field of fields) {
+      if (!categoryAgg[field]) {
+        categoryAgg[field] = { total: 0, count: 0 }
+      }
+      categoryAgg[field].total += sentimentScore
+      categoryAgg[field].count += 1
+    }
   }
 
   // Build the categories update object
