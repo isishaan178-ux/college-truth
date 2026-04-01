@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, use } from 'react'
+import { useEffect, useState, useCallback, use, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,6 +14,7 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  MessageSquare,
 } from 'lucide-react'
 
 interface Post {
@@ -31,6 +32,12 @@ interface Post {
   verified: boolean
   isApproved: boolean
   createdAt: string
+}
+
+interface ThreadGroup {
+  threadTitle: string
+  mainPost: Post | null
+  comments: Post[]
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -79,6 +86,76 @@ function formatSource(source: string) {
   return source.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+function getThreadTitle(title: string): string {
+  return title.replace(/^Re:\s*/i, '').trim()
+}
+
+function groupPostsByThread(posts: Post[]): (Post | ThreadGroup)[] {
+  const threadMap = new Map<string, ThreadGroup>()
+  const standalone: Post[] = []
+
+  for (const post of posts) {
+    if (post.title.startsWith('Re: ')) {
+      const threadTitle = getThreadTitle(post.title)
+      if (!threadMap.has(threadTitle)) {
+        threadMap.set(threadTitle, { threadTitle, mainPost: null, comments: [] })
+      }
+      threadMap.get(threadTitle)!.comments.push(post)
+    } else {
+      // Check if this is a parent post that has Re: children
+      const normalizedTitle = post.title.trim()
+      if (threadMap.has(normalizedTitle)) {
+        threadMap.get(normalizedTitle)!.mainPost = post
+      } else {
+        // Check if any future Re: posts match
+        standalone.push(post)
+      }
+    }
+  }
+
+  // Second pass: match standalone posts to threads
+  for (let i = standalone.length - 1; i >= 0; i--) {
+    const post = standalone[i]
+    const normalizedTitle = post.title.trim()
+    if (threadMap.has(normalizedTitle)) {
+      threadMap.get(normalizedTitle)!.mainPost = post
+      standalone.splice(i, 1)
+    }
+  }
+
+  // Build final list: standalone posts + thread groups (sorted by first post date)
+  const result: (Post | ThreadGroup)[] = []
+
+  // Add thread groups
+  for (const group of threadMap.values()) {
+    if (group.comments.length > 0) {
+      result.push(group)
+    }
+  }
+
+  // Add standalone posts
+  for (const post of standalone) {
+    result.push(post)
+  }
+
+  // Sort by most recent post date
+  result.sort((a, b) => {
+    const dateA = 'comments' in a
+      ? new Date(a.comments[0]?.createdAt || '').getTime()
+      : new Date(a.createdAt).getTime()
+    const dateB = 'comments' in b
+      ? new Date(b.comments[0]?.createdAt || '').getTime()
+      : new Date(b.createdAt).getTime()
+    return dateB - dateA
+  })
+
+  return result
+}
+
+function isThreadGroup(item: Post | ThreadGroup): item is ThreadGroup {
+  return 'comments' in item && 'threadTitle' in item
+}
+
 export default function AdminCollegeDetail({
   params,
 }: {
@@ -94,7 +171,11 @@ export default function AdminCollegeDetail({
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [bulkLoading, setBulkLoading] = useState(false)
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set())
+  const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set())
   const [activeTab, setActiveTab] = useState<string | null>('pending')
+
+  const pendingGrouped = useMemo(() => groupPostsByThread(pendingPosts), [pendingPosts])
+  const approvedGrouped = useMemo(() => groupPostsByThread(approvedPosts), [approvedPosts])
 
   const fetchPosts = useCallback(async (authToken: string) => {
     try {
@@ -212,13 +293,134 @@ export default function AdminCollegeDetail({
   function toggleExpand(postId: string) {
     setExpandedPosts((prev) => {
       const next = new Set(prev)
-      if (next.has(postId)) {
-        next.delete(postId)
-      } else {
-        next.add(postId)
-      }
+      if (next.has(postId)) next.delete(postId)
+      else next.add(postId)
       return next
     })
+  }
+
+  function toggleThread(threadTitle: string) {
+    setExpandedThreads((prev) => {
+      const next = new Set(prev)
+      if (next.has(threadTitle)) next.delete(threadTitle)
+      else next.add(threadTitle)
+      return next
+    })
+  }
+
+  function CommentRow({ post, showActions }: { post: Post; showActions: boolean }) {
+    const isExpanded = expandedPosts.has(post._id)
+    const isLong = post.content.length > 200
+
+    return (
+      <div className="border-l-2 border-zinc-700/50 pl-4 py-3">
+        {/* Badges */}
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <Badge className={`${CATEGORY_COLORS[post.category] || 'bg-zinc-700 text-zinc-300'} text-xs`}>
+            {formatCategory(post.category)}
+          </Badge>
+          <Badge className={`${SENTIMENT_COLORS[post.sentiment] || 'bg-zinc-700 text-zinc-300'} text-xs`}>
+            {post.sentiment}
+          </Badge>
+          {post.upvotes > 0 && (
+            <span className="text-zinc-500 text-xs">{post.upvotes} upvotes</span>
+          )}
+        </div>
+
+        {/* Content */}
+        <p className="text-zinc-400 text-sm leading-relaxed whitespace-pre-wrap">
+          {isExpanded || !isLong ? post.content : post.content.slice(0, 200) + '...'}
+        </p>
+        {isLong && (
+          <button
+            className="text-indigo-400 text-xs mt-1 hover:underline inline-flex items-center gap-1"
+            onClick={() => toggleExpand(post._id)}
+          >
+            {isExpanded ? <>Less <ChevronUp className="size-3" /></> : <>More <ChevronDown className="size-3" /></>}
+          </button>
+        )}
+
+        {/* Meta + Actions */}
+        <div className="flex items-center gap-3 mt-2 text-zinc-600 text-xs flex-wrap">
+          <span>{post.author}</span>
+          <span>{formatDate(post.createdAt)}</span>
+          {post.sourceUrl && (
+            <a href={post.sourceUrl} target="_blank" rel="noopener noreferrer"
+              className="text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1"
+              onClick={(e) => e.stopPropagation()}>
+              Source <ExternalLink className="size-3" />
+            </a>
+          )}
+          {showActions && (
+            <>
+              <Button
+                size="sm"
+                onClick={() => handleApprove(post._id)}
+                disabled={actionLoading === post._id}
+                className="h-6 px-2 bg-green-600/15 text-green-400 hover:bg-green-600/25 border-green-600/20 text-xs"
+              >
+                <Check className="size-3" />
+                {actionLoading === post._id ? '...' : 'Approve'}
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => handleDelete(post._id)}
+                disabled={actionLoading === post._id}
+                className="h-6 px-2 bg-red-600/15 text-red-400 hover:bg-red-600/25 border-red-600/20 text-xs"
+              >
+                <Trash2 className="size-3" />
+                Delete
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  function ThreadCard({ group, showActions }: { group: ThreadGroup; showActions: boolean }) {
+    const isOpen = expandedThreads.has(group.threadTitle)
+    const totalComments = group.comments.length + (group.mainPost ? 1 : 0)
+
+    return (
+      <Card className="bg-zinc-900/50 border-zinc-800/60">
+        <CardContent className="pt-4 pb-4">
+          {/* Thread header - clickable to expand */}
+          <button
+            onClick={() => toggleThread(group.threadTitle)}
+            className="w-full text-left"
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <Badge className="bg-orange-500/15 text-orange-400 text-xs">Reddit</Badge>
+              <Badge className="bg-indigo-500/15 text-indigo-400 text-xs">
+                <MessageSquare className="size-3 mr-1" />
+                {totalComments} comments
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-white font-medium text-sm">{group.threadTitle}</h4>
+              {isOpen ? (
+                <ChevronUp className="size-4 text-zinc-500 shrink-0" />
+              ) : (
+                <ChevronDown className="size-4 text-zinc-500 shrink-0" />
+              )}
+            </div>
+          </button>
+
+          {/* Expanded: show all comments */}
+          {isOpen && (
+            <div className="mt-4 space-y-1">
+              {group.mainPost && (
+                <CommentRow post={group.mainPost} showActions={showActions} />
+              )}
+              {group.comments.map((comment) => (
+                <CommentRow key={comment._id} post={comment} showActions={showActions} />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    )
   }
 
   function PostCard({ post, showActions }: { post: Post; showActions: boolean }) {
@@ -228,7 +430,6 @@ export default function AdminCollegeDetail({
     return (
       <Card className="bg-zinc-900/50 border-zinc-800/60">
         <CardContent className="pt-4 pb-4">
-          {/* Badges row */}
           <div className="flex items-center gap-2 flex-wrap mb-3">
             <Badge className={`${SOURCE_COLORS[post.source] || 'bg-zinc-700 text-zinc-300'} text-xs`}>
               {formatSource(post.source)}
@@ -244,12 +445,10 @@ export default function AdminCollegeDetail({
             )}
           </div>
 
-          {/* Title */}
           {post.title && (
             <h4 className="text-white font-medium text-sm mb-2">{post.title}</h4>
           )}
 
-          {/* Content */}
           <p className="text-zinc-400 text-sm leading-relaxed whitespace-pre-wrap">
             {isExpanded || !isLong ? post.content : post.content.slice(0, 300) + '...'}
           </p>
@@ -258,32 +457,22 @@ export default function AdminCollegeDetail({
               className="text-indigo-400 text-xs mt-1 hover:underline inline-flex items-center gap-1"
               onClick={() => toggleExpand(post._id)}
             >
-              {isExpanded ? (
-                <>Show less <ChevronUp className="size-3" /></>
-              ) : (
-                <>Show more <ChevronDown className="size-3" /></>
-              )}
+              {isExpanded ? <>Show less <ChevronUp className="size-3" /></> : <>Show more <ChevronDown className="size-3" /></>}
             </button>
           )}
 
-          {/* Meta row */}
           <div className="flex items-center gap-3 mt-3 text-zinc-600 text-xs flex-wrap">
             <span>{post.author}</span>
             <span>{formatDate(post.createdAt)}</span>
             {post.sourceUrl && (
-              <a
-                href={post.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              <a href={post.sourceUrl} target="_blank" rel="noopener noreferrer"
                 className="text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1"
-                onClick={(e) => e.stopPropagation()}
-              >
+                onClick={(e) => e.stopPropagation()}>
                 Source <ExternalLink className="size-3" />
               </a>
             )}
           </div>
 
-          {/* Action buttons */}
           {showActions && (
             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-zinc-800/60">
               <Button
@@ -311,6 +500,19 @@ export default function AdminCollegeDetail({
     )
   }
 
+  function PostList({ items, showActions }: { items: (Post | ThreadGroup)[]; showActions: boolean }) {
+    return (
+      <div className="space-y-3">
+        {items.map((item) => {
+          if (isThreadGroup(item)) {
+            return <ThreadCard key={item.threadTitle} group={item} showActions={showActions} />
+          }
+          return <PostCard key={item._id} post={item} showActions={showActions} />
+        })}
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
@@ -321,7 +523,6 @@ export default function AdminCollegeDetail({
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
-      {/* Header */}
       <header className="border-b border-zinc-800/60 bg-[#0a0a0f]/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-4">
           <Button
@@ -377,7 +578,7 @@ export default function AdminCollegeDetail({
           </div>
 
           <TabsContent value="pending">
-            {pendingPosts.length === 0 ? (
+            {pendingGrouped.length === 0 ? (
               <Card className="bg-zinc-900/50 border-zinc-800/60">
                 <CardContent className="py-12 text-center">
                   <CheckCheck className="size-10 text-green-500/30 mx-auto mb-3" />
@@ -385,27 +586,19 @@ export default function AdminCollegeDetail({
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-3">
-                {pendingPosts.map((post) => (
-                  <PostCard key={post._id} post={post} showActions={true} />
-                ))}
-              </div>
+              <PostList items={pendingGrouped} showActions={true} />
             )}
           </TabsContent>
 
           <TabsContent value="approved">
-            {approvedPosts.length === 0 ? (
+            {approvedGrouped.length === 0 ? (
               <Card className="bg-zinc-900/50 border-zinc-800/60">
                 <CardContent className="py-12 text-center">
                   <p className="text-zinc-500">No approved posts yet</p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-3">
-                {approvedPosts.map((post) => (
-                  <PostCard key={post._id} post={post} showActions={false} />
-                ))}
-              </div>
+              <PostList items={approvedGrouped} showActions={false} />
             )}
           </TabsContent>
         </Tabs>

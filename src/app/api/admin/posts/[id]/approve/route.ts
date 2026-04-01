@@ -13,17 +13,18 @@ export async function PATCH(
     await connectDB()
     const { id } = await params
 
-    const post = await Post.findById(id)
+    const post = await Post.findByIdAndUpdate(
+      id,
+      { isApproved: true, verified: true },
+      { new: true }
+    )
+
     if (!post) {
       return Response.json(
         { success: false, error: 'Post not found' },
         { status: 404 }
       )
     }
-
-    post.isApproved = true
-    post.verified = true
-    await post.save()
 
     await recalculateScores(post.collegeSlug)
 
