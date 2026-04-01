@@ -7,7 +7,7 @@ function checkAuth(request: Request): boolean {
   const authHeader = request.headers.get('Authorization')
   if (!authHeader) return false
   const token = authHeader.replace('Bearer ', '')
-  return token === process.env.ADMIN_PASSWORD
+  return token === process.env.ADMIN_SECRET
 }
 
 export async function GET(request: Request) {
