@@ -22,6 +22,7 @@ import {
   SentimentIndicator,
   SentimentBreakdown,
 } from "@/components/SentimentIndicator";
+import { IncidentsSection } from "@/components/IncidentsSection";
 import type { CollegeData, Post } from "./page";
 
 const categoryTabs = [
@@ -306,6 +307,11 @@ export function CollegeDetailClient({ college }: { college: CollegeData }) {
                 </TabsContent>
               ))}
             </Tabs>
+          </div>
+
+          {/* ===== INCIDENTS SECTION ===== */}
+          <div className="col-span-full">
+            <IncidentsSection slug={college.slug} />
           </div>
 
           {/* ===== SIDEBAR (desktop only) ===== */}
