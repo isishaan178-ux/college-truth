@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -12,95 +13,72 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Building2,
+  FileText,
+  Clock,
+  CheckCircle2,
+  Plus,
+  Search,
+  RefreshCw,
+  LogOut,
+} from 'lucide-react'
 
-interface Stats {
-  totalColleges: number
-  totalPosts: number
-  pendingSubmissions: number
-  postsToday: number
-  postsBySource: Record<string, number>
-  postsByCategory: Record<string, number>
-}
-
-interface Submission {
+interface CollegeWithCounts {
   _id: string
-  collegeName: string
-  collegeSlug: string
-  category: string
-  content: string
-  author: string
-  email: string
-  status: string
-  adminNote: string
-  createdAt: string
+  name: string
+  slug: string
+  city: string
+  state: string
+  type: string
+  overallScore: number
+  pendingPosts: number
+  approvedPosts: number
 }
 
-interface Post {
-  _id: string
-  collegeName: string
-  category: string
-  sentiment: string
-  source: string
-  content: string
-  title: string
-  author: string
-  createdAt: string
-}
-
-const CATEGORY_COLORS: Record<string, string> = {
-  PLACEMENTS: 'bg-green-600',
-  HOSTEL_MESS: 'bg-yellow-600',
-  PROFESSORS: 'bg-blue-600',
-  MENTAL_HEALTH: 'bg-purple-600',
-  CAMPUS_LIFE: 'bg-pink-600',
-  SPORTS: 'bg-cyan-600',
-  RESTRICTIONS: 'bg-red-600',
-  INFRASTRUCTURE: 'bg-orange-600',
-  NEWS_CONTROVERSY: 'bg-rose-700',
-}
-
-const SENTIMENT_COLORS: Record<string, string> = {
-  POSITIVE: 'bg-emerald-600',
-  NEGATIVE: 'bg-red-600',
-  NEUTRAL: 'bg-zinc-600',
+interface Totals {
+  colleges: number
+  posts: number
+  pending: number
+  approved: number
 }
 
 export default function AdminDashboard() {
   const router = useRouter()
   const [token, setToken] = useState('')
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [submissions, setSubmissions] = useState<Submission[]>([])
-  const [recentPosts, setRecentPosts] = useState<Post[]>([])
+  const [colleges, setColleges] = useState<CollegeWithCounts[]>([])
+  const [totals, setTotals] = useState<Totals>({ colleges: 0, posts: 0, pending: 0, approved: 0 })
   const [loading, setLoading] = useState(true)
-  const [expandedSubmission, setExpandedSubmission] = useState<string | null>(null)
-  const [rejectDialog, setRejectDialog] = useState<string | null>(null)
-  const [rejectNote, setRejectNote] = useState('')
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showAddDialog, setShowAddDialog] = useState(false)
+  const [addForm, setAddForm] = useState({ name: '', city: '', state: '', type: 'private' })
+  const [addLoading, setAddLoading] = useState(false)
+  const [addError, setAddError] = useState('')
 
   const fetchData = useCallback(async (authToken: string) => {
     try {
-      const headers = { Authorization: `Bearer ${authToken}` }
+      const res = await fetch('/api/admin/colleges', {
+        headers: { Authorization: `Bearer ${authToken}` },
+      })
 
-      const [statsRes, subsRes, postsRes] = await Promise.all([
-        fetch('/api/admin/stats', { headers }),
-        fetch('/api/submissions?status=pending&limit=50', { headers }),
-        fetch('/api/posts?limit=20', { headers }),
-      ])
-
-      if (statsRes.status === 401) {
+      if (res.status === 401) {
         sessionStorage.removeItem('admin_token')
         router.push('/admin/login')
         return
       }
 
-      const statsData = await statsRes.json()
-      const subsData = await subsRes.json()
-      const postsData = await postsRes.json()
-
-      if (statsData.success) setStats(statsData.data)
-      if (subsData.success) setSubmissions(subsData.data || [])
-      if (postsData.success) setRecentPosts(postsData.data || [])
+      const data = await res.json()
+      if (data.success) {
+        setColleges(data.data.colleges)
+        setTotals(data.data.totals)
+      }
     } catch (err) {
       console.error('Failed to fetch admin data:', err)
     } finally {
@@ -118,90 +96,80 @@ export default function AdminDashboard() {
     fetchData(stored)
   }, [router, fetchData])
 
-  async function handleApprove(submissionId: string) {
-    setActionLoading(submissionId)
+  async function handleAddCollege() {
+    if (!addForm.name || !addForm.city || !addForm.state || !addForm.type) {
+      setAddError('All fields are required')
+      return
+    }
+
+    setAddLoading(true)
+    setAddError('')
+
     try {
-      const res = await fetch(`/api/submissions/${submissionId}`, {
-        method: 'PATCH',
+      const res = await fetch('/api/admin/colleges', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action: 'approve' }),
+        body: JSON.stringify(addForm),
       })
-      if (res.ok) {
-        setSubmissions((prev) => prev.filter((s) => s._id !== submissionId))
+
+      const data = await res.json()
+
+      if (data.success) {
+        setShowAddDialog(false)
+        setAddForm({ name: '', city: '', state: '', type: 'private' })
         fetchData(token)
+      } else {
+        setAddError(data.error || 'Failed to add college')
       }
     } catch (err) {
-      console.error('Failed to approve:', err)
+      setAddError('Network error')
     } finally {
-      setActionLoading(null)
+      setAddLoading(false)
     }
   }
 
-  async function handleReject(submissionId: string) {
-    setActionLoading(submissionId)
-    try {
-      const res = await fetch(`/api/submissions/${submissionId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ action: 'reject', adminNote: rejectNote }),
-      })
-      if (res.ok) {
-        setSubmissions((prev) => prev.filter((s) => s._id !== submissionId))
-        setRejectDialog(null)
-        setRejectNote('')
-        fetchData(token)
-      }
-    } catch (err) {
-      console.error('Failed to reject:', err)
-    } finally {
-      setActionLoading(null)
-    }
-  }
+  const filteredColleges = colleges.filter((c) =>
+    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.city.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
-  function formatDate(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
-
-  function formatCategory(cat: string) {
-    return cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  const typeBadgeColor: Record<string, string> = {
+    private: 'bg-blue-600/20 text-blue-400',
+    government: 'bg-green-600/20 text-green-400',
+    deemed: 'bg-purple-600/20 text-purple-400',
+    autonomous: 'bg-amber-600/20 text-amber-400',
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
         <div className="text-zinc-400 text-lg">Loading admin dashboard...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
+    <div className="min-h-screen bg-[#0a0a0f] text-white">
       {/* Header */}
-      <header className="border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b border-zinc-800/60 bg-[#0a0a0f]/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-white">College Sach Admin</h1>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+              College Sach Admin
+            </h1>
             <p className="text-zinc-500 text-sm">Dashboard & Content Management</p>
           </div>
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => fetchData(token)}
+              onClick={() => { setLoading(true); fetchData(token) }}
               className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
             >
+              <RefreshCw className="size-3.5" />
               Refresh
             </Button>
             <Button
@@ -213,6 +181,7 @@ export default function AdminDashboard() {
               }}
               className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
             >
+              <LogOut className="size-3.5" />
               Logout
             </Button>
           </div>
@@ -220,276 +189,210 @@ export default function AdminDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-        {/* Stats Overview */}
-        <section>
-          <h2 className="text-lg font-semibold text-zinc-300 mb-4">Overview</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="bg-zinc-900 border-zinc-800">
-              <CardContent className="pt-6">
-                <p className="text-zinc-500 text-sm">Total Colleges</p>
-                <p className="text-3xl font-bold text-white mt-1">
-                  {stats?.totalColleges || 0}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-zinc-900 border-zinc-800">
-              <CardContent className="pt-6">
-                <p className="text-zinc-500 text-sm">Total Posts</p>
-                <p className="text-3xl font-bold text-white mt-1">
-                  {stats?.totalPosts || 0}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-zinc-900 border-zinc-800">
-              <CardContent className="pt-6">
-                <p className="text-zinc-500 text-sm">Pending Submissions</p>
-                <p className="text-3xl font-bold text-orange-400 mt-1">
-                  {stats?.pendingSubmissions || 0}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-zinc-900 border-zinc-800">
-              <CardContent className="pt-6">
-                <p className="text-zinc-500 text-sm">Posts Today</p>
-                <p className="text-3xl font-bold text-green-400 mt-1">
-                  {stats?.postsToday || 0}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-
-        {/* Posts by Source & Category */}
-        {stats && (
-          <section className="grid md:grid-cols-2 gap-4">
-            <Card className="bg-zinc-900 border-zinc-800">
-              <CardHeader>
-                <CardTitle className="text-zinc-300 text-base">Posts by Source</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {Object.entries(stats.postsBySource).length === 0 ? (
-                  <p className="text-zinc-500 text-sm">No data yet</p>
-                ) : (
-                  Object.entries(stats.postsBySource).map(([source, count]) => (
-                    <div key={source} className="flex justify-between items-center">
-                      <span className="text-zinc-400 text-sm capitalize">{source}</span>
-                      <Badge variant="secondary" className="bg-zinc-800 text-zinc-300">
-                        {count}
-                      </Badge>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-            <Card className="bg-zinc-900 border-zinc-800">
-              <CardHeader>
-                <CardTitle className="text-zinc-300 text-base">Posts by Category</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {Object.entries(stats.postsByCategory).length === 0 ? (
-                  <p className="text-zinc-500 text-sm">No data yet</p>
-                ) : (
-                  Object.entries(stats.postsByCategory).map(([category, count]) => (
-                    <div key={category} className="flex justify-between items-center">
-                      <Badge className={`${CATEGORY_COLORS[category] || 'bg-zinc-700'} text-white text-xs`}>
-                        {formatCategory(category)}
-                      </Badge>
-                      <span className="text-zinc-400 text-sm">{count}</span>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          </section>
-        )}
-
-        {/* Pending Submissions */}
-        <section>
-          <h2 className="text-lg font-semibold text-zinc-300 mb-4">
-            Pending Submissions ({submissions.length})
-          </h2>
-          {submissions.length === 0 ? (
-            <Card className="bg-zinc-900 border-zinc-800">
-              <CardContent className="py-8 text-center">
-                <p className="text-zinc-500">No pending submissions</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {submissions.map((sub) => (
-                <Card key={sub._id} className="bg-zinc-900 border-zinc-800">
-                  <CardContent className="pt-4 pb-4">
-                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-2">
-                          <span className="font-medium text-white">{sub.collegeName}</span>
-                          <Badge className={`${CATEGORY_COLORS[sub.category] || 'bg-zinc-700'} text-white text-xs`}>
-                            {formatCategory(sub.category)}
-                          </Badge>
-                          <span className="text-zinc-500 text-xs">
-                            by {sub.author} | {formatDate(sub.createdAt)}
-                          </span>
-                        </div>
-                        <p className="text-zinc-400 text-sm">
-                          {expandedSubmission === sub._id
-                            ? sub.content
-                            : sub.content.length > 200
-                              ? sub.content.slice(0, 200) + '...'
-                              : sub.content}
-                        </p>
-                        {sub.content.length > 200 && (
-                          <button
-                            className="text-orange-400 text-xs mt-1 hover:underline"
-                            onClick={() =>
-                              setExpandedSubmission(
-                                expandedSubmission === sub._id ? null : sub._id
-                              )
-                            }
-                          >
-                            {expandedSubmission === sub._id ? 'Show less' : 'Show more'}
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Button
-                          size="sm"
-                          onClick={() => handleApprove(sub._id)}
-                          disabled={actionLoading === sub._id}
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                        >
-                          {actionLoading === sub._id ? '...' : 'Approve'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => setRejectDialog(sub._id)}
-                          disabled={actionLoading === sub._id}
-                          className="bg-red-600 hover:bg-red-700"
-                        >
-                          Reject
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Recent Posts */}
-        <section>
-          <h2 className="text-lg font-semibold text-zinc-300 mb-4">Recent Posts</h2>
-          {recentPosts.length === 0 ? (
-            <Card className="bg-zinc-900 border-zinc-800">
-              <CardContent className="py-8 text-center">
-                <p className="text-zinc-500">No posts yet</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {recentPosts.map((post) => (
-                <Card key={post._id} className="bg-zinc-900 border-zinc-800">
-                  <CardContent className="py-3">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <span className="font-medium text-white text-sm">
-                            {post.collegeName}
-                          </span>
-                          <Badge className={`${CATEGORY_COLORS[post.category] || 'bg-zinc-700'} text-white text-xs`}>
-                            {formatCategory(post.category)}
-                          </Badge>
-                          <Badge className={`${SENTIMENT_COLORS[post.sentiment] || 'bg-zinc-700'} text-white text-xs`}>
-                            {post.sentiment}
-                          </Badge>
-                          <Badge variant="outline" className="text-zinc-400 border-zinc-700 text-xs">
-                            {post.source}
-                          </Badge>
-                        </div>
-                        {post.title && (
-                          <p className="text-zinc-300 text-sm font-medium">{post.title}</p>
-                        )}
-                        <p className="text-zinc-500 text-xs mt-1 line-clamp-2">
-                          {post.content}
-                        </p>
-                        <p className="text-zinc-600 text-xs mt-1">
-                          {post.author} | {formatDate(post.createdAt)}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Scraping Status */}
-        <section>
-          <h2 className="text-lg font-semibold text-zinc-300 mb-4">Scraping Status</h2>
-          <Card className="bg-zinc-900 border-zinc-800">
-            <CardContent className="py-6">
-              <div className="grid md:grid-cols-3 gap-6">
-                <div>
-                  <p className="text-zinc-500 text-sm">Reddit Scraper</p>
-                  <p className="text-zinc-300 text-sm mt-1">
-                    Runs daily via GitHub Actions at 6:00 AM IST
-                  </p>
+        {/* Stats Bar */}
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="bg-zinc-900/50 border-zinc-800/60">
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-indigo-500/10">
+                  <Building2 className="size-5 text-indigo-400" />
                 </div>
                 <div>
-                  <p className="text-zinc-500 text-sm">Review Scraper</p>
-                  <p className="text-zinc-300 text-sm mt-1">
-                    CollegeDunia & Shiksha reviews
-                  </p>
+                  <p className="text-zinc-500 text-xs">Total Colleges</p>
+                  <p className="text-2xl font-bold text-white">{totals.colleges}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-zinc-900/50 border-zinc-800/60">
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-500/10">
+                  <FileText className="size-5 text-purple-400" />
                 </div>
                 <div>
-                  <p className="text-zinc-500 text-sm">Total Sources</p>
-                  <p className="text-zinc-300 text-sm mt-1">
-                    {stats ? Object.keys(stats.postsBySource).length : 0} active sources
-                  </p>
+                  <p className="text-zinc-500 text-xs">Total Posts</p>
+                  <p className="text-2xl font-bold text-white">{totals.posts}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-zinc-900/50 border-zinc-800/60">
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-orange-500/10">
+                  <Clock className="size-5 text-orange-400" />
+                </div>
+                <div>
+                  <p className="text-zinc-500 text-xs">Pending Posts</p>
+                  <p className="text-2xl font-bold text-orange-400">{totals.pending}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-zinc-900/50 border-zinc-800/60">
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-green-500/10">
+                  <CheckCircle2 className="size-5 text-green-400" />
+                </div>
+                <div>
+                  <p className="text-zinc-500 text-xs">Approved Posts</p>
+                  <p className="text-2xl font-bold text-green-400">{totals.approved}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </section>
+
+        {/* Search + Add College */}
+        <section className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-zinc-500" />
+            <Input
+              placeholder="Search colleges..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 bg-zinc-900/50 border-zinc-800 text-white placeholder:text-zinc-500"
+            />
+          </div>
+          <Button
+            onClick={() => setShowAddDialog(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+          >
+            <Plus className="size-4" />
+            Add College
+          </Button>
+        </section>
+
+        {/* College Grid */}
+        <section>
+          {filteredColleges.length === 0 ? (
+            <Card className="bg-zinc-900/50 border-zinc-800/60">
+              <CardContent className="py-12 text-center">
+                <p className="text-zinc-500">
+                  {searchQuery ? 'No colleges match your search' : 'No colleges yet'}
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredColleges.map((college) => (
+                <Card
+                  key={college._id}
+                  className="bg-zinc-900/50 border-zinc-800/60 hover:border-indigo-500/30 transition-colors cursor-pointer group"
+                  onClick={() => router.push(`/admin/college/${college.slug}`)}
+                >
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle className="text-white group-hover:text-indigo-300 transition-colors text-base leading-snug">
+                        {college.name}
+                      </CardTitle>
+                      <Badge className={`${typeBadgeColor[college.type] || 'bg-zinc-700 text-zinc-300'} text-xs shrink-0 capitalize`}>
+                        {college.type}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <p className="text-zinc-500 text-sm mb-3">{college.city}, {college.state}</p>
+                    <div className="flex items-center gap-2">
+                      {college.pendingPosts > 0 && (
+                        <Badge className="bg-orange-500/15 text-orange-400 text-xs">
+                          {college.pendingPosts} pending
+                        </Badge>
+                      )}
+                      <Badge className="bg-green-500/15 text-green-400 text-xs">
+                        {college.approvedPosts} approved
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
       </main>
 
-      {/* Reject Dialog */}
-      <Dialog open={!!rejectDialog} onOpenChange={() => setRejectDialog(null)}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
+      {/* Add College Dialog */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Reject Submission</DialogTitle>
+            <DialogTitle className="text-white">Add New College</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-zinc-400 text-sm">
-              Optionally add a note explaining the rejection:
-            </p>
-            <Textarea
-              placeholder="Reason for rejection (optional)"
-              value={rejectNote}
-              onChange={(e) => setRejectNote(e.target.value)}
-              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
-            />
+          <div className="space-y-4">
+            {addError && (
+              <p className="text-red-400 text-sm bg-red-500/10 px-3 py-2 rounded-lg">{addError}</p>
+            )}
+            <div>
+              <label className="text-zinc-400 text-sm mb-1 block">College Name</label>
+              <Input
+                placeholder="e.g. Indian Institute of Technology Delhi"
+                value={addForm.name}
+                onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
+              />
+              {addForm.name && (
+                <p className="text-zinc-600 text-xs mt-1">
+                  Slug: {addForm.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim()}
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-zinc-400 text-sm mb-1 block">City</label>
+                <Input
+                  placeholder="e.g. New Delhi"
+                  value={addForm.city}
+                  onChange={(e) => setAddForm({ ...addForm, city: e.target.value })}
+                  className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
+                />
+              </div>
+              <div>
+                <label className="text-zinc-400 text-sm mb-1 block">State</label>
+                <Input
+                  placeholder="e.g. Delhi"
+                  value={addForm.state}
+                  onChange={(e) => setAddForm({ ...addForm, state: e.target.value })}
+                  className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-zinc-400 text-sm mb-1 block">Type</label>
+              <Select
+                value={addForm.type}
+                onValueChange={(val) => setAddForm({ ...addForm, type: val as string })}
+              >
+                <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-white">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-800 border-zinc-700">
+                  <SelectItem value="private">Private</SelectItem>
+                  <SelectItem value="government">Government</SelectItem>
+                  <SelectItem value="deemed">Deemed</SelectItem>
+                  <SelectItem value="autonomous">Autonomous</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => {
-                setRejectDialog(null)
-                setRejectNote('')
+                setShowAddDialog(false)
+                setAddForm({ name: '', city: '', state: '', type: 'private' })
+                setAddError('')
               }}
               className="border-zinc-700 text-zinc-300"
             >
               Cancel
             </Button>
             <Button
-              variant="destructive"
-              onClick={() => rejectDialog && handleReject(rejectDialog)}
-              disabled={actionLoading === rejectDialog}
-              className="bg-red-600 hover:bg-red-700"
+              onClick={handleAddCollege}
+              disabled={addLoading}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
             >
-              {actionLoading === rejectDialog ? 'Rejecting...' : 'Confirm Reject'}
+              {addLoading ? 'Adding...' : 'Add College'}
             </Button>
           </DialogFooter>
         </DialogContent>

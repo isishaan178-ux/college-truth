@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const colleges = await College.find({
       name: { $regex: q, $options: 'i' },
     })
-      .select('name slug city state type overallScore')
+      .select('name slug city state type overallScore totalPosts categories')
       .limit(10)
       .lean()
 

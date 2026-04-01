@@ -245,21 +245,26 @@ export default function ComparePage() {
               <CardContent>
                 <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${selectedColleges.length}, 1fr)` }}>
                   {selectedColleges.map((c) => {
-                    const cats = c.categories
-                    const best = Object.entries(cats).reduce((a, b) => ((b[1] as CollegeCategory).score > (a[1] as CollegeCategory).score ? b : a))
-                    const worst = Object.entries(cats).filter(([, v]) => (v as CollegeCategory).score > 0).reduce((a, b) => ((b[1] as CollegeCategory).score < (a[1] as CollegeCategory).score ? b : a), Object.entries(cats).filter(([, v]) => (v as CollegeCategory).score > 0)[0] || best)
+                    const cats = c.categories || {}
+                    const withScores = Object.entries(cats).filter(([, v]) => (v as CollegeCategory).score > 0)
+                    const best = withScores.length > 0
+                      ? withScores.reduce((a, b) => ((b[1] as CollegeCategory).score > (a[1] as CollegeCategory).score ? b : a))
+                      : null
+                    const worst = withScores.length > 1
+                      ? withScores.reduce((a, b) => ((b[1] as CollegeCategory).score < (a[1] as CollegeCategory).score ? b : a))
+                      : null
                     return (
                       <div key={c._id} className="space-y-2">
                         <p className="font-medium text-sm">{c.name}</p>
                         <div className="flex items-center gap-1.5 text-xs">
                           <TrendingUp className="w-3.5 h-3.5 text-green-400" />
                           <span className="text-green-400">Best:</span>
-                          <span>{categoryLabels[best[0]] || best[0]}</span>
+                          <span>{best ? (categoryLabels[best[0]] || best[0]) : 'No data'}</span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs">
                           <TrendingDown className="w-3.5 h-3.5 text-red-400" />
                           <span className="text-red-400">Worst:</span>
-                          <span>{worst ? (categoryLabels[worst[0]] || worst[0]) : '-'}</span>
+                          <span>{worst ? (categoryLabels[worst[0]] || worst[0]) : 'No data'}</span>
                         </div>
                       </div>
                     )

@@ -1,5 +1,4 @@
-praw
+pymongo
 requests
 beautifulsoup4
-python-dotenv
-lxml
+dnspython

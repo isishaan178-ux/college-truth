@@ -3,6 +3,9 @@ import College from "@/lib/models/College";
 import Post from "@/lib/models/Post";
 import { CollegeDetailClient } from "./college-detail-client";
 
+// Revalidate every 5 minutes for faster page loads
+export const revalidate = 300;
+
 export interface CategoryScore {
   score: number;
   positive: number;
