@@ -1,0 +1,54 @@
+name: Run College Scrapers
+
+on:
+  # Weekly automatic run — every Sunday at midnight UTC
+  schedule:
+    - cron: '0 0 * * 0'
+
+  # Manual trigger from GitHub UI or API
+  workflow_dispatch:
+    inputs:
+      scraper:
+        description: 'Which scraper to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - reddit
+          - news
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd scrapers
+          pip install -r requirements.txt
+
+      - name: Run Reddit Scraper
+        if: github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'reddit' || github.event_name == 'schedule'
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+        run: |
+          cd scrapers
+          python reddit_scraper_v2.py
+
+      - name: Run News Scraper
+        if: github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'news' || github.event_name == 'schedule'
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+        run: |
+          cd scrapers
+          python news_scraper.py

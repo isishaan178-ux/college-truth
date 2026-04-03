@@ -29,6 +29,9 @@ import {
   Search,
   RefreshCw,
   LogOut,
+  Play,
+  Loader2,
+  ExternalLink,
 } from 'lucide-react'
 
 interface CollegeWithCounts {
@@ -61,6 +64,41 @@ export default function AdminDashboard() {
   const [addForm, setAddForm] = useState({ name: '', city: '', state: '', type: 'private' })
   const [addLoading, setAddLoading] = useState(false)
   const [addError, setAddError] = useState('')
+  const [scraperLoading, setScraperLoading] = useState<string | null>(null)
+  const [scraperMsg, setScraperMsg] = useState('')
+  const [scraperRuns, setScraperRuns] = useState<any[]>([])
+
+  async function triggerScraper(scraper: 'all' | 'reddit' | 'news') {
+    setScraperLoading(scraper)
+    setScraperMsg('')
+    try {
+      const res = await fetch('/api/admin/scraper', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ scraper }),
+      })
+      const data = await res.json()
+      setScraperMsg(data.success ? `✓ ${data.message}` : `✗ ${data.error}`)
+    } catch {
+      setScraperMsg('✗ Network error')
+    } finally {
+      setScraperLoading(null)
+      fetchScraperStatus()
+    }
+  }
+
+  async function fetchScraperStatus() {
+    try {
+      const res = await fetch('/api/admin/scraper', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (data.success) setScraperRuns(data.data || [])
+    } catch {}
+  }
 
   const fetchData = useCallback(async (authToken: string) => {
     try {
@@ -94,7 +132,13 @@ export default function AdminDashboard() {
     }
     setToken(stored)
     fetchData(stored)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, fetchData])
+
+  useEffect(() => {
+    if (token) fetchScraperStatus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
 
   async function handleAddCollege() {
     if (!addForm.name || !addForm.city || !addForm.state || !addForm.type) {
@@ -241,6 +285,81 @@ export default function AdminDashboard() {
                   <p className="text-2xl font-bold text-green-400">{totals.approved}</p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Scraper Controls */}
+        <section>
+          <Card className="bg-zinc-900/50 border-zinc-800/60">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-white text-base flex items-center gap-2">
+                <Play className="size-4 text-indigo-400" />
+                Scraper Controls
+              </CardTitle>
+              <p className="text-zinc-500 text-xs">Runs automatically every Sunday. Or trigger manually below.</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => triggerScraper('all')}
+                  disabled={!!scraperLoading}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  {scraperLoading === 'all' ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+                  Run All Scrapers
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => triggerScraper('reddit')}
+                  disabled={!!scraperLoading}
+                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                >
+                  {scraperLoading === 'reddit' ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+                  Reddit Only
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => triggerScraper('news')}
+                  disabled={!!scraperLoading}
+                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                >
+                  {scraperLoading === 'news' ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+                  News Only
+                </Button>
+              </div>
+              {scraperMsg && (
+                <p className={`text-sm px-3 py-2 rounded-lg ${scraperMsg.startsWith('✓') ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                  {scraperMsg}
+                </p>
+              )}
+              {scraperRuns.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-zinc-500 text-xs font-medium">Recent runs:</p>
+                  {scraperRuns.slice(0, 3).map((run: any) => (
+                    <div key={run.id} className="flex items-center gap-2 text-xs">
+                      <Badge className={`text-xs ${
+                        run.conclusion === 'success' ? 'bg-green-500/15 text-green-400' :
+                        run.conclusion === 'failure' ? 'bg-red-500/15 text-red-400' :
+                        run.status === 'in_progress' ? 'bg-yellow-500/15 text-yellow-400' :
+                        'bg-zinc-700/50 text-zinc-400'
+                      }`}>
+                        {run.conclusion || run.status}
+                      </Badge>
+                      <span className="text-zinc-500">
+                        {new Date(run.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span className="text-zinc-600">({run.trigger})</span>
+                      <a href={run.url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300">
+                        <ExternalLink className="size-3" />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </section>
