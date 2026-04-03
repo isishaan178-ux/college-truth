@@ -17,6 +17,11 @@ on:
           - all
           - reddit
           - news
+      college_slug:
+        description: 'College slug (leave empty for all colleges)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   scrape:
@@ -43,7 +48,11 @@ jobs:
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
           cd scrapers
-          python reddit_scraper_v2.py
+          if [ -n "${{ github.event.inputs.college_slug }}" ]; then
+            python reddit_scraper_v2.py --college "${{ github.event.inputs.college_slug }}"
+          else
+            python reddit_scraper_v2.py
+          fi
 
       - name: Run News Scraper
         if: github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'news' || github.event_name == 'schedule'
@@ -51,4 +60,8 @@ jobs:
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
           cd scrapers
-          python news_scraper.py
+          if [ -n "${{ github.event.inputs.college_slug }}" ]; then
+            python news_scraper.py --college "${{ github.event.inputs.college_slug }}"
+          else
+            python news_scraper.py
+          fi

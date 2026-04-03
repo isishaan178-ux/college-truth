@@ -297,15 +297,16 @@ def connect_to_mongodb():
     return client, db["colleges"], db["incidents"]
 
 
-def get_colleges(colleges_col) -> list[dict[str, Any]]:
-    """Fetch all colleges with their name, slug, and _id."""
+def get_colleges(colleges_col, slug_filter: str = "") -> list[dict[str, Any]]:
+    """Fetch colleges with their name, slug, and _id. Optionally filter by slug."""
+    query = {"slug": slug_filter} if slug_filter else {}
     colleges = []
-    for doc in colleges_col.find({}, {"name": 1, "slug": 1, "_id": 1}):
+    for doc in colleges_col.find(query, {"name": 1, "slug": 1, "_id": 1}):
         name = doc.get("name", "")
         slug = doc.get("slug", "")
         if name and slug:
             colleges.append({"name": name, "slug": slug, "_id": doc["_id"]})
-    logger.info(f"Loaded {len(colleges)} colleges from MongoDB.")
+    logger.info(f"Loaded {len(colleges)} colleges from MongoDB." + (f" (filter: {slug_filter})" if slug_filter else ""))
     return colleges
 
 
@@ -474,11 +475,17 @@ def main() -> None:
     incidents_col.create_index("type")
     incidents_col.create_index("source")
 
+    # Parse --college argument
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--college", default="", help="Slug of a specific college to scrape")
+    args = parser.parse_args()
+
     try:
         # Load colleges
-        colleges = get_colleges(colleges_col)
+        colleges = get_colleges(colleges_col, slug_filter=args.college)
         if not colleges:
-            logger.error("No colleges found in MongoDB. Exiting.")
+            logger.error("No colleges found in MongoDB." + (f" (slug: {args.college})" if args.college else ""))
             return
 
         # Pre-load existing content hashes for fast deduplication

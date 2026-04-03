@@ -9,6 +9,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}))
     const scraper = body.scraper || 'all'
+    const collegeSlug = body.collegeSlug || ''
 
     const token = process.env.GH_PAT
     if (!token) {
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
         },
         body: JSON.stringify({
           ref: 'main',
-          inputs: { scraper },
+          inputs: { scraper, college_slug: collegeSlug },
         }),
       }
     )
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     if (res.status === 204) {
       return Response.json({
         success: true,
-        message: `Scraper "${scraper}" triggered successfully. It will run in the background on GitHub Actions.`,
+        message: `Scraper "${scraper}" triggered${collegeSlug ? ` for ${collegeSlug}` : ''} successfully. It will run in the background on GitHub Actions.`,
       })
     }
 

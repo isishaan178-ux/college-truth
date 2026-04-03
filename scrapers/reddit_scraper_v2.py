@@ -235,15 +235,16 @@ def connect_to_mongodb() -> tuple[Any, Any, Any]:
     return client, db["colleges"], db["posts"]
 
 
-def get_colleges(colleges_col: Any) -> list[dict[str, str]]:
-    """Fetch all colleges with their name and slug."""
+def get_colleges(colleges_col: Any, slug_filter: str = "") -> list[dict[str, str]]:
+    """Fetch colleges with their name and slug. Optionally filter by slug."""
+    query = {"slug": slug_filter} if slug_filter else {}
     colleges = []
-    for doc in colleges_col.find({}, {"name": 1, "slug": 1, "_id": 1}):
+    for doc in colleges_col.find(query, {"name": 1, "slug": 1, "_id": 1}):
         name = doc.get("name", "")
         slug = doc.get("slug", "")
         if name and slug:
             colleges.append({"name": name, "slug": slug, "_id": doc["_id"]})
-    logger.info(f"Loaded {len(colleges)} colleges from MongoDB.")
+    logger.info(f"Loaded {len(colleges)} colleges from MongoDB." + (f" (filter: {slug_filter})" if slug_filter else ""))
     return colleges
 
 
@@ -592,11 +593,17 @@ def main() -> None:
     if migrated2.modified_count > 0:
         logger.info(f"Migrated {migrated2.modified_count} posts: score -> upvotes")
 
+    # Parse --college argument
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--college", default="", help="Slug of a specific college to scrape")
+    args = parser.parse_args()
+
     try:
         # Load colleges
-        colleges = get_colleges(colleges_col)
+        colleges = get_colleges(colleges_col, slug_filter=args.college)
         if not colleges:
-            logger.error("No colleges found in MongoDB. Exiting.")
+            logger.error("No colleges found in MongoDB." + (f" (slug: {args.college})" if args.college else ""))
             return
 
         # Pre-load existing content hashes for fast deduplication

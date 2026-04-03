@@ -68,8 +68,11 @@ export default function AdminDashboard() {
   const [scraperMsg, setScraperMsg] = useState('')
   const [scraperRuns, setScraperRuns] = useState<any[]>([])
 
-  async function triggerScraper(scraper: 'all' | 'reddit' | 'news') {
-    setScraperLoading(scraper)
+  const [selectedCollege, setSelectedCollege] = useState('')
+
+  async function triggerScraper(scraper: 'all' | 'reddit' | 'news', collegeSlug?: string) {
+    const key = collegeSlug ? `${scraper}-${collegeSlug}` : scraper
+    setScraperLoading(key)
     setScraperMsg('')
     try {
       const res = await fetch('/api/admin/scraper', {
@@ -78,7 +81,7 @@ export default function AdminDashboard() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ scraper }),
+        body: JSON.stringify({ scraper, collegeSlug: collegeSlug || '' }),
       })
       const data = await res.json()
       setScraperMsg(data.success ? `✓ ${data.message}` : `✗ ${data.error}`)
@@ -300,37 +303,62 @@ export default function AdminDashboard() {
               <p className="text-zinc-500 text-xs">Runs automatically every Sunday. Or trigger manually below.</p>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* College filter */}
+              <div className="flex items-center gap-2">
+                <Select value={selectedCollege} onValueChange={(val) => setSelectedCollege(val ?? '')}>
+                  <SelectTrigger className="w-64 bg-zinc-800 border-zinc-700 text-white">
+                    <SelectValue placeholder="All colleges" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-800 border-zinc-700 max-h-60">
+                    <SelectItem value="all">All colleges</SelectItem>
+                    {colleges.map((c) => (
+                      <SelectItem key={c.slug} value={c.slug}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedCollege && selectedCollege !== 'all' && (
+                  <button
+                    onClick={() => setSelectedCollege('')}
+                    className="text-zinc-500 hover:text-zinc-300 text-xs"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
-                  onClick={() => triggerScraper('all')}
+                  onClick={() => triggerScraper('all', selectedCollege && selectedCollege !== 'all' ? selectedCollege : undefined)}
                   disabled={!!scraperLoading}
                   className="bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
-                  {scraperLoading === 'all' ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+                  {scraperLoading?.startsWith('all') ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
                   Run All Scrapers
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => triggerScraper('reddit')}
+                  onClick={() => triggerScraper('reddit', selectedCollege && selectedCollege !== 'all' ? selectedCollege : undefined)}
                   disabled={!!scraperLoading}
                   className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
                 >
-                  {scraperLoading === 'reddit' ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+                  {scraperLoading?.startsWith('reddit') ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
                   Reddit Only
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => triggerScraper('news')}
+                  onClick={() => triggerScraper('news', selectedCollege && selectedCollege !== 'all' ? selectedCollege : undefined)}
                   disabled={!!scraperLoading}
                   className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
                 >
-                  {scraperLoading === 'news' ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+                  {scraperLoading?.startsWith('news') ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
                   News Only
                 </Button>
               </div>
+              {selectedCollege && selectedCollege !== 'all' && (
+                <p className="text-xs text-indigo-400">Scraping only: {colleges.find(c => c.slug === selectedCollege)?.name || selectedCollege}</p>
+              )}
               {scraperMsg && (
                 <p className={`text-sm px-3 py-2 rounded-lg ${scraperMsg.startsWith('✓') ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
                   {scraperMsg}
