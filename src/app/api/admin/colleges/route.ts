@@ -67,7 +67,7 @@ export async function GET(request: Request) {
     })
   } catch (error: any) {
     return Response.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
     return Response.json({ success: true, data: college }, { status: 201 })
   } catch (error: any) {
     return Response.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }

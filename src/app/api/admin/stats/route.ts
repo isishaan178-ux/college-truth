@@ -2,21 +2,10 @@ import { connectDB } from '@/lib/mongodb'
 import College from '@/lib/models/College'
 import Post from '@/lib/models/Post'
 import Submission from '@/lib/models/Submission'
-
-function checkAuth(request: Request): boolean {
-  const authHeader = request.headers.get('Authorization')
-  if (!authHeader) return false
-  const token = authHeader.replace('Bearer ', '')
-  return token === process.env.ADMIN_SECRET
-}
+import { verifyAdmin, unauthorizedResponse } from '@/lib/admin-auth'
 
 export async function GET(request: Request) {
-  if (!checkAuth(request)) {
-    return Response.json(
-      { success: false, error: 'Unauthorized' },
-      { status: 401 }
-    )
-  }
+  if (!verifyAdmin(request)) return unauthorizedResponse()
 
   try {
     await connectDB()
@@ -66,8 +55,9 @@ export async function GET(request: Request) {
       },
     })
   } catch (error: any) {
+    console.error('Admin stats error:', error)
     return Response.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }

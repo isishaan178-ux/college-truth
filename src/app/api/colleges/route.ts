@@ -1,28 +1,29 @@
 import { connectDB } from '@/lib/mongodb'
 import College from '@/lib/models/College'
+import { escapeRegex, stripMongoOps } from '@/lib/validate'
 
 export async function GET(request: Request) {
   try {
     await connectDB()
 
     const { searchParams } = new URL(request.url)
-    const search = searchParams.get('search') || ''
+    const search = stripMongoOps(searchParams.get('search') || '').slice(0, 200)
     const type = searchParams.get('type') || ''
-    const state = searchParams.get('state') || ''
+    const state = stripMongoOps(searchParams.get('state') || '').slice(0, 100)
     const sort = searchParams.get('sort') || 'overallScore'
     const page = parseInt(searchParams.get('page') || '1', 10)
-    const limit = parseInt(searchParams.get('limit') || '20', 10)
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 100)
 
     const filter: Record<string, any> = {}
 
     if (search) {
-      filter.name = { $regex: search, $options: 'i' }
+      filter.name = { $regex: escapeRegex(search), $options: 'i' }
     }
-    if (type) {
+    if (type && typeof type === 'string') {
       filter.type = type
     }
     if (state) {
-      filter.state = { $regex: state, $options: 'i' }
+      filter.state = { $regex: escapeRegex(state), $options: 'i' }
     }
 
     const sortOptions: Record<string, any> = {}
@@ -56,8 +57,9 @@ export async function GET(request: Request) {
       },
     })
   } catch (error: any) {
+    console.error('Colleges GET error:', error)
     return Response.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }

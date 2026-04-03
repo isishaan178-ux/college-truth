@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     })
   } catch (error: any) {
     return Response.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }

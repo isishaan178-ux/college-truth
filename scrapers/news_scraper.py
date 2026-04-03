@@ -7,8 +7,10 @@ and stores incidents back to MongoDB.
 
 import hashlib
 import logging
+import os
 import random
 import re
+import sys
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -31,10 +33,10 @@ logger = logging.getLogger("news_scraper")
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
-MONGO_URI = (
-    "mongodb+srv://college:truth@college-truth.rehagna.mongodb.net/"
-    "college-truth?retryWrites=true&w=majority&appName=college-truth"
-)
+MONGO_URI = os.environ.get("MONGO_URI", "")
+if not MONGO_URI:
+    print("ERROR: MONGO_URI environment variable is not set. Exiting.")
+    sys.exit(1)
 
 DDG_SEARCH_URL = "https://lite.duckduckgo.com/lite/"
 

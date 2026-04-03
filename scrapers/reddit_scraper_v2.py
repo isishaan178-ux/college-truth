@@ -6,8 +6,10 @@ Reads colleges from MongoDB, searches Reddit, and stores posts back to MongoDB.
 
 import hashlib
 import logging
+import os
 import random
 import re
+import sys
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -27,10 +29,10 @@ logger = logging.getLogger("reddit_scraper_v2")
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
-MONGO_URI = (
-    "mongodb+srv://college:truth@college-truth.rehagna.mongodb.net/"
-    "college-truth?retryWrites=true&w=majority&appName=college-truth"
-)
+MONGO_URI = os.environ.get("MONGO_URI", "")
+if not MONGO_URI:
+    print("ERROR: MONGO_URI environment variable is not set. Exiting.")
+    sys.exit(1)
 
 BASE_URL = "https://old.reddit.com"
 

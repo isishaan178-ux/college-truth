@@ -2,11 +2,14 @@ import { connectDB } from '@/lib/mongodb'
 import Submission from '@/lib/models/Submission'
 import Post from '@/lib/models/Post'
 import College from '@/lib/models/College'
+import { verifyAdmin, unauthorizedResponse } from '@/lib/admin-auth'
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!verifyAdmin(request)) return unauthorizedResponse()
+
   try {
     await connectDB()
     const { id } = await params
@@ -68,8 +71,9 @@ export async function PATCH(
 
     return Response.json({ success: true, data: submission })
   } catch (error: any) {
+    console.error('Submissions PATCH error:', error)
     return Response.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }

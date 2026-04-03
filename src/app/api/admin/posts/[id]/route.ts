@@ -29,7 +29,7 @@ export async function DELETE(
     return Response.json({ success: true })
   } catch (error: any) {
     return Response.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }

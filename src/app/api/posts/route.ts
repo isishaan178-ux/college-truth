@@ -1,6 +1,7 @@
 import { connectDB } from '@/lib/mongodb'
 import Post from '@/lib/models/Post'
 import College from '@/lib/models/College'
+import { verifyAdmin, unauthorizedResponse } from '@/lib/admin-auth'
 
 export async function GET(request: Request) {
   try {
@@ -39,13 +40,15 @@ export async function GET(request: Request) {
     })
   } catch (error: any) {
     return Response.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }
 }
 
 export async function POST(request: Request) {
+  if (!verifyAdmin(request)) return unauthorizedResponse()
+
   try {
     await connectDB()
 
@@ -79,8 +82,8 @@ export async function POST(request: Request) {
       content,
       title: title || '',
       author: author || 'Anonymous',
-      verified: source !== 'user_submission',
-      isApproved: source !== 'user_submission',
+      verified: false,
+      isApproved: false,
     })
 
     // Update college totalPosts
@@ -91,7 +94,7 @@ export async function POST(request: Request) {
     return Response.json({ success: true, data: post }, { status: 201 })
   } catch (error: any) {
     return Response.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }

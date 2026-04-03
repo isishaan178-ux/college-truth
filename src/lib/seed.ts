@@ -2,7 +2,10 @@ import mongoose from 'mongoose'
 import College from './models/College'
 import Post from './models/Post'
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/college-truth'
+const MONGODB_URI = process.env.MONGODB_URI
+if (!MONGODB_URI) {
+  throw new Error('MONGODB_URI environment variable is not set')
+}
 
 interface CollegeSeed {
   name: string

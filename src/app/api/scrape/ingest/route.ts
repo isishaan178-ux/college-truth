@@ -1,6 +1,7 @@
 import { connectDB } from '@/lib/mongodb'
 import College from '@/lib/models/College'
 import Post from '@/lib/models/Post'
+import { verifyAdmin, unauthorizedResponse } from '@/lib/admin-auth'
 
 interface IngestPost {
   collegeName: string
@@ -39,6 +40,8 @@ function sentimentToScore(sentiment: string): number {
 }
 
 export async function POST(request: Request) {
+  if (!verifyAdmin(request)) return unauthorizedResponse()
+
   try {
     await connectDB()
 
@@ -90,8 +93,8 @@ export async function POST(request: Request) {
           content: item.content,
           title: item.title || '',
           author: item.author || 'Anonymous',
-          verified: true,
-          isApproved: true,
+          verified: false,
+          isApproved: false,
         })
 
         results.created++
@@ -154,7 +157,7 @@ export async function POST(request: Request) {
     return Response.json({ success: true, data: results }, { status: 201 })
   } catch (error: any) {
     return Response.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }

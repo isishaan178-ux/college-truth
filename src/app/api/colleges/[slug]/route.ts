@@ -1,6 +1,7 @@
 import { connectDB } from '@/lib/mongodb'
 import College from '@/lib/models/College'
 import Post from '@/lib/models/Post'
+import { slugSchema } from '@/lib/validate'
 
 export async function GET(
   request: Request,
@@ -8,7 +9,12 @@ export async function GET(
 ) {
   try {
     await connectDB()
-    const { slug } = await params
+    const { slug: rawSlug } = await params
+    const parsed = slugSchema.safeParse(rawSlug)
+    if (!parsed.success) {
+      return Response.json({ success: false, error: 'Invalid slug' }, { status: 400 })
+    }
+    const slug = parsed.data
 
     const college = await College.findOne({ slug }).lean()
     if (!college) {
@@ -41,8 +47,9 @@ export async function GET(
       },
     })
   } catch (error: any) {
+    console.error('College slug GET error:', error)
     return Response.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }

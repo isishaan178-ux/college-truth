@@ -1,7 +1,12 @@
+import { timingSafeEqual } from 'crypto'
+
 export function verifyAdmin(request: Request): boolean {
   const auth = request.headers.get('Authorization')
   if (!auth?.startsWith('Bearer ')) return false
-  return auth.split(' ')[1] === process.env.ADMIN_SECRET
+  const token = auth.split(' ')[1]
+  const secret = process.env.ADMIN_SECRET
+  if (!secret || token.length !== secret.length) return false
+  return timingSafeEqual(Buffer.from(token), Buffer.from(secret))
 }
 
 export function unauthorizedResponse() {

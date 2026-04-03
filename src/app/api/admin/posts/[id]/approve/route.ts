@@ -31,7 +31,7 @@ export async function PATCH(
     return Response.json({ success: true, data: post })
   } catch (error: any) {
     return Response.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     )
   }
