@@ -2,7 +2,7 @@ import mongoose from 'mongoose'
 import College from './models/College'
 import Post from './models/Post'
 
-const MONGODB_URI = process.env.MONGODB_URI
+const MONGODB_URI = process.env.MONGODB_URI as string
 if (!MONGODB_URI) {
   throw new Error('MONGODB_URI environment variable is not set')
 }
