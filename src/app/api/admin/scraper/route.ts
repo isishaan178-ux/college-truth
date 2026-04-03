@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}))
     const scraper = body.scraper || 'all'
 
-    const token = process.env.GITHUB_PAT
+    const token = process.env.GH_PAT
     if (!token) {
       return Response.json(
         { success: false, error: 'GitHub PAT not configured' },
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
   if (!verifyAdmin(request)) return unauthorizedResponse()
 
   try {
-    const token = process.env.GITHUB_PAT
+    const token = process.env.GH_PAT
     if (!token) {
       return Response.json(
         { success: false, error: 'GitHub PAT not configured' },
